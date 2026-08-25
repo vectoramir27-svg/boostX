@@ -285,18 +285,28 @@ namespace BoostX.Views
             }
         }
 
+        // Прозрачная проверка онлайн-обновления с детальными уведомлениями
         private async void BtnCheckUpdates_Click(object sender, RoutedEventArgs e)
         {
             ShowToast("Проверка сервера обновлений...", true);
-            var update = await UpdateService.CheckForUpdatesAsync();
+            var (update, errorMessage) = await UpdateService.CheckForUpdatesAsync();
+
+            if (!string.IsNullOrEmpty(errorMessage))
+            {
+                MessageBox.Show($"Не удалось проверить обновление:\n{errorMessage}\n\nПроверьте подключение к интернету или файл version.json на GitHub.", "Ошибка проверки", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
 
             if (update != null && !string.IsNullOrWhiteSpace(update.LatestVersion))
             {
-                // Сравниваем версию из файла version.json с текущей запущенной версией программы
-                if (update.LatestVersion.Trim() != UpdateService.CurrentVersion.Trim())
+                // Нормализуем версии (убираем префикс 'v', пробелы и сравниваем без учета регистра)
+                string serverVer = update.LatestVersion.Trim().TrimStart('v', 'V');
+                string currentVer = UpdateService.CurrentVersion.Trim().TrimStart('v', 'V');
+
+                if (!string.Equals(serverVer, currentVer, StringComparison.OrdinalIgnoreCase))
                 {
                     var res = MessageBox.Show(
-                        $"Доступна новая версия v{update.LatestVersion}!\n\nЧто нового:\n{update.Changelog}\n\nОбновить прямо сейчас?",
+                        $"Доступна новая версия: v{update.LatestVersion}!\n(Текущая: v{UpdateService.CurrentVersion})\n\nЧто нового:\n{update.Changelog}\n\nОбновить сейчас?",
                         "Обновление boostX",
                         MessageBoxButton.YesNo,
                         MessageBoxImage.Information);
@@ -304,7 +314,11 @@ namespace BoostX.Views
                     if (res == MessageBoxResult.Yes)
                     {
                         ShowToast("Загрузка обновления...", true);
-                        await UpdateService.DownloadAndInstallUpdateAsync(update.DownloadUrl);
+                        bool success = await UpdateService.DownloadAndInstallUpdateAsync(update.DownloadUrl);
+                        if (!success)
+                        {
+                            MessageBox.Show("Не удалось скачать или установить файл обновления. Проверьте ссылку DownloadUrl в файле version.json на GitHub.", "Ошибка установки", MessageBoxButton.OK, MessageBoxImage.Error);
+                        }
                     }
                     return;
                 }
