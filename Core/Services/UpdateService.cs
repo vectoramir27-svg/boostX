@@ -17,7 +17,7 @@ namespace BoostX.Core.Services
     public static class UpdateService
     {
         // Версия текущей сборки приложения
-        public const string CurrentVersion = "1.0.2";
+        public const string CurrentVersion = "1.0.3";
 
         // URL к манифесту на GitHub
         private const string UpdateCheckUrl = "https://raw.githubusercontent.com/vectoramir27-svg/boostX/main/version.json";
