@@ -28,7 +28,6 @@ namespace BoostX.Core.Services
         [JsonPropertyName("changelog")]
         public string? ChangelogLower { get; set; }
 
-        // Универсальные геттеры, достающие значение независимо от регистра в JSON
         public string LatestVersion => !string.IsNullOrWhiteSpace(LatestVersionProp) ? LatestVersionProp : (VersionProp ?? "");
         public string DownloadUrl => !string.IsNullOrWhiteSpace(DownloadUrlProp) ? DownloadUrlProp : (DownloadUrlSnake ?? "");
         public string Changelog => !string.IsNullOrWhiteSpace(ChangelogProp) ? ChangelogProp : (ChangelogLower ?? "Плановое обновление");
@@ -36,12 +35,12 @@ namespace BoostX.Core.Services
 
     public static class UpdateService
     {
-        // Текущая версия запущенного приложения
+        // Твоя текущая запущенная сборка (старая)
         public const string CurrentVersion = "1.0.2";
 
         private const string UpdateCheckUrl = "https://raw.githubusercontent.com/vectoramir27-svg/boostX/main/version.json";
 
-        public static async Task<(UpdateInfo? info, string? errorMessage)> CheckForUpdatesAsync()
+        public static async Task<(UpdateInfo? info, string rawJson, string? errorMessage)> CheckForUpdatesAsync()
         {
             try
             {
@@ -52,38 +51,38 @@ namespace BoostX.Core.Services
                 using var client = new HttpClient(handler);
                 client.Timeout = TimeSpan.FromSeconds(8);
 
-                // Заголовки стандартного браузера Windows
-                client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-                client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/json, text/plain, */*");
-                client.DefaultRequestHeaders.TryAddWithoutValidation("Cache-Control", "no-cache");
+                client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "*/*");
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Cache-Control", "no-cache, no-store, must-revalidate");
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Pragma", "no-cache");
 
-                string noCacheUrl = $"{UpdateCheckUrl}?nocache={Guid.NewGuid()}";
+                // Уникальный параметр обхода кэша
+                string noCacheUrl = $"{UpdateCheckUrl}?ts={DateTime.UtcNow.Ticks}";
 
                 var response = await client.GetAsync(noCacheUrl);
                 if (!response.IsSuccessStatusCode)
                 {
-                    return (null, $"Сервер GitHub вернул статус: {(int)response.StatusCode} ({response.ReasonPhrase})");
+                    return (null, "", $"GitHub вернул ошибку: {(int)response.StatusCode} ({response.ReasonPhrase})");
                 }
 
                 var json = await response.Content.ReadAsStringAsync();
                 if (string.IsNullOrWhiteSpace(json))
                 {
-                    return (null, "Файл version.json на GitHub пустой.");
+                    return (null, "", "Файл version.json пустой!");
                 }
 
                 var options = new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true,
-                    AllowTrailingCommas = true,
-                    ReadCommentHandling = JsonCommentHandling.Skip
+                    AllowTrailingCommas = true
                 };
 
                 var info = JsonSerializer.Deserialize<UpdateInfo>(json, options);
-                return (info, null);
+                return (info, json, null);
             }
             catch (Exception ex)
             {
-                return (null, $"Ошибка подключения к сети: {ex.Message}");
+                return (null, "", $"Исключение сети: {ex.Message}");
             }
         }
 
