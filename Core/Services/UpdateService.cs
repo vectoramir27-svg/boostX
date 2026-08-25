@@ -9,17 +9,16 @@ namespace BoostX.Core.Services
 {
     public class UpdateInfo
     {
-        public string LatestVersion { get; set; } = "1.0.2";
+        public string LatestVersion { get; set; } = "1.0.0";
         public string DownloadUrl { get; set; } = "";
         public string Changelog { get; set; } = "";
     }
 
     public static class UpdateService
     {
-        // Версия текущей сборки приложения
-        public const string CurrentVersion = "1.0.3";
+        // Текущая версия запущенной программы
+        public const string CurrentVersion = "1.0.2";
 
-        // URL к манифесту на GitHub
         private const string UpdateCheckUrl = "https://raw.githubusercontent.com/vectoramir27-svg/boostX/main/version.json";
 
         public static async Task<UpdateInfo?> CheckForUpdatesAsync()
@@ -27,11 +26,16 @@ namespace BoostX.Core.Services
             try
             {
                 using var client = new HttpClient();
-                client.Timeout = TimeSpan.FromSeconds(5);
-                // GitHub требует наличия заголовка User-Agent
-                client.DefaultRequestHeaders.Add("User-Agent", "BoostX-App");
+                client.Timeout = TimeSpan.FromSeconds(6);
+                client.DefaultRequestHeaders.Add("User-Agent", "BoostX-Client");
 
-                var json = await client.GetStringAsync(UpdateCheckUrl);
+                // Добавляем timestamp к URL, чтобы обойти 5-минутный кэш GitHub
+                string noCacheUrl = $"{UpdateCheckUrl}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+
+                var response = await client.GetAsync(noCacheUrl);
+                if (!response.IsSuccessStatusCode) return null;
+
+                var json = await response.Content.ReadAsStringAsync();
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 return JsonSerializer.Deserialize<UpdateInfo>(json, options);
             }
@@ -51,14 +55,12 @@ namespace BoostX.Core.Services
 
                 using (var client = new HttpClient())
                 {
-                    // GitHub требует наличие заголовка User-Agent при скачивании файла релиза
-                    client.DefaultRequestHeaders.Add("User-Agent", "BoostX-App");
-
+                    client.DefaultRequestHeaders.Add("User-Agent", "BoostX-Client");
                     var data = await client.GetByteArrayAsync(downloadUrl);
                     await File.WriteAllBytesAsync(tempPath, data);
                 }
 
-                // Скрипт бесшовного обновления
+                // Батник для бесшовной замены exe
                 var updaterBat = Path.Combine(Path.GetTempPath(), "boostx_updater.bat");
                 var batContent = $@"
 @echo off
