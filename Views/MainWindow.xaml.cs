@@ -30,7 +30,7 @@ namespace BoostX.Views
                 Win32.ApplyModernWindowStyle(handle);
 
                 AuthService.InitSession();
-                UpdateAccountUI();
+                CheckUserAuth();
 
                 if (ViewModel != null)
                 {
@@ -43,43 +43,56 @@ namespace BoostX.Views
             };
         }
 
-        private void UpdateAccountUI()
+        private void CheckUserAuth()
         {
             if (AuthService.CurrentUser.IsLoggedIn)
             {
-                TxtAccountStatus.Text = $"BoostX ID: {AuthService.CurrentUser.BoostXId} (Синхронизация активна)";
-                TxtAccountStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x34, 0xC7, 0x59));
-                TxtBoostXKey.Text = AuthService.CurrentUser.BoostXId;
+                LoginScreenModal.Visibility = Visibility.Collapsed;
+                TxtSettingsAccountKey.Text = AuthService.CurrentUser.BoostXId;
             }
             else
             {
-                TxtAccountStatus.Text = "Сессия: Гостевой режим (Локально)";
-                TxtAccountStatus.Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
+                LoginScreenModal.Visibility = Visibility.Visible;
+                var anim = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(300));
+                LoginScreenModal.BeginAnimation(UIElement.OpacityProperty, anim);
             }
         }
 
-        private void BtnLoginKey_Click(object sender, RoutedEventArgs e)
+        private void BtnPerformLogin_Click(object sender, RoutedEventArgs e)
         {
-            var key = TxtBoostXKey.Text;
+            var key = TxtLoginKey.Text.Trim();
             if (AuthService.LoginWithKey(key))
             {
-                UpdateAccountUI();
-                ShowToast("Вход по BoostX ID выполнен!", true);
+                TxtSettingsAccountKey.Text = AuthService.CurrentUser.BoostXId;
+
+                var anim = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(200));
+                anim.Completed += (s, ev) => LoginScreenModal.Visibility = Visibility.Collapsed;
+                LoginScreenModal.BeginAnimation(UIElement.OpacityProperty, anim);
+
+                ShowToast($"Добро пожаловать, {AuthService.CurrentUser.Username}!", true);
             }
             else
             {
-                ShowToast("Неверный формат ключа BoostX ID", false);
+                ShowToast("Неверный ключ BoostX ID! Нажмите 'Получить ключ в боте'", false);
             }
         }
 
-        private void BtnGetBotKey_Click(object sender, RoutedEventArgs e)
+        private void BtnLogout_Click(object sender, RoutedEventArgs e)
+        {
+            AuthService.Logout();
+            SettingsModal.Visibility = Visibility.Collapsed;
+            TxtLoginKey.Text = "BX-";
+            CheckUserAuth();
+            ShowToast("Вы вышли из аккаунта", true);
+        }
+
+        private void BtnOpenAuthBot_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                // Ссылка на авторизационного бота проекта
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = "https://t.me/wonderfultech",
+                    FileName = "https://t.me/boostXauth_bot",
                     UseShellExecute = true
                 });
             }
@@ -99,7 +112,6 @@ namespace BoostX.Views
             catch { }
         }
 
-        // Исправленная смена цвета: гарантированно переопределяет словарь ресурсов и перерисовывает окно
         private void ColorTheme_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button btn && btn.Tag is string hex)
@@ -122,7 +134,7 @@ namespace BoostX.Views
                 int currentToken = ++_toastToken;
 
                 ToastMessageText.Text = message;
-                ToastIconBg.Background = (Brush)FindResource("AccentColorBrush");
+                ToastIconBg.Background = new SolidColorBrush(isSuccess ? Color.FromRgb(0x34, 0xC7, 0x59) : Color.FromRgb(0x8E, 0x8E, 0x93));
                 ToastIconPath.Data = Geometry.Parse(isSuccess ? "M4,11 L9,16 L18,7" : "M6,6 L18,18 M18,6 L6,18");
 
                 var fadeIn = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(250))
@@ -278,19 +290,27 @@ namespace BoostX.Views
             ShowToast("Проверка сервера обновлений...", true);
             var update = await UpdateService.CheckForUpdatesAsync();
 
-            if (update != null && update.LatestVersion != UpdateService.CurrentVersion)
+            if (update != null && !string.IsNullOrWhiteSpace(update.LatestVersion))
             {
-                var res = MessageBox.Show($"Доступна новая версия v{update.LatestVersion}!\n\nЧто нового:\n{update.Changelog}\n\nОбновить прямо сейчас?", "Обновление boostX", MessageBoxButton.YesNo, MessageBoxImage.Information);
-                if (res == MessageBoxResult.Yes)
+                // Сравниваем версию из файла version.json с текущей запущенной версией программы
+                if (update.LatestVersion.Trim() != UpdateService.CurrentVersion.Trim())
                 {
-                    ShowToast("Загрузка обновления...", true);
-                    await UpdateService.DownloadAndInstallUpdateAsync(update.DownloadUrl);
+                    var res = MessageBox.Show(
+                        $"Доступна новая версия v{update.LatestVersion}!\n\nЧто нового:\n{update.Changelog}\n\nОбновить прямо сейчас?",
+                        "Обновление boostX",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Information);
+
+                    if (res == MessageBoxResult.Yes)
+                    {
+                        ShowToast("Загрузка обновления...", true);
+                        await UpdateService.DownloadAndInstallUpdateAsync(update.DownloadUrl);
+                    }
+                    return;
                 }
             }
-            else
-            {
-                ShowToast("У вас установлена самая свежая версия v1.0.0", true);
-            }
+
+            ShowToast($"У вас установлена самая свежая версия v{UpdateService.CurrentVersion}", true);
         }
 
         private void NavTab_Checked(object sender, RoutedEventArgs e)
