@@ -3,45 +3,87 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace BoostX.Core.Services
 {
     public class UpdateInfo
     {
-        public string LatestVersion { get; set; } = "1.0.0";
-        public string DownloadUrl { get; set; } = "";
-        public string Changelog { get; set; } = "";
+        [JsonPropertyName("LatestVersion")]
+        public string? LatestVersionProp { get; set; }
+
+        [JsonPropertyName("version")]
+        public string? VersionProp { get; set; }
+
+        [JsonPropertyName("DownloadUrl")]
+        public string? DownloadUrlProp { get; set; }
+
+        [JsonPropertyName("download_url")]
+        public string? DownloadUrlSnake { get; set; }
+
+        [JsonPropertyName("Changelog")]
+        public string? ChangelogProp { get; set; }
+
+        [JsonPropertyName("changelog")]
+        public string? ChangelogLower { get; set; }
+
+        // Универсальные геттеры, достающие значение независимо от регистра в JSON
+        public string LatestVersion => !string.IsNullOrWhiteSpace(LatestVersionProp) ? LatestVersionProp : (VersionProp ?? "");
+        public string DownloadUrl => !string.IsNullOrWhiteSpace(DownloadUrlProp) ? DownloadUrlProp : (DownloadUrlSnake ?? "");
+        public string Changelog => !string.IsNullOrWhiteSpace(ChangelogProp) ? ChangelogProp : (ChangelogLower ?? "Плановое обновление");
     }
 
     public static class UpdateService
     {
-        // Текущая версия запущенной программы
+        // Текущая версия запущенного приложения
         public const string CurrentVersion = "1.0.2";
 
         private const string UpdateCheckUrl = "https://raw.githubusercontent.com/vectoramir27-svg/boostX/main/version.json";
 
-        public static async Task<UpdateInfo?> CheckForUpdatesAsync()
+        public static async Task<(UpdateInfo? info, string? errorMessage)> CheckForUpdatesAsync()
         {
             try
             {
-                using var client = new HttpClient();
-                client.Timeout = TimeSpan.FromSeconds(6);
-                client.DefaultRequestHeaders.Add("User-Agent", "BoostX-Client");
+                using var handler = new HttpClientHandler
+                {
+                    AutomaticDecompression = System.Net.DecompressionMethods.All
+                };
+                using var client = new HttpClient(handler);
+                client.Timeout = TimeSpan.FromSeconds(8);
 
-                // Добавляем timestamp к URL, чтобы обойти 5-минутный кэш GitHub
-                string noCacheUrl = $"{UpdateCheckUrl}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+                // Заголовки стандартного браузера Windows
+                client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/json, text/plain, */*");
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Cache-Control", "no-cache");
+
+                string noCacheUrl = $"{UpdateCheckUrl}?nocache={Guid.NewGuid()}";
 
                 var response = await client.GetAsync(noCacheUrl);
-                if (!response.IsSuccessStatusCode) return null;
+                if (!response.IsSuccessStatusCode)
+                {
+                    return (null, $"Сервер GitHub вернул статус: {(int)response.StatusCode} ({response.ReasonPhrase})");
+                }
 
                 var json = await response.Content.ReadAsStringAsync();
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                return JsonSerializer.Deserialize<UpdateInfo>(json, options);
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    return (null, "Файл version.json на GitHub пустой.");
+                }
+
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    AllowTrailingCommas = true,
+                    ReadCommentHandling = JsonCommentHandling.Skip
+                };
+
+                var info = JsonSerializer.Deserialize<UpdateInfo>(json, options);
+                return (info, null);
             }
-            catch
+            catch (Exception ex)
             {
-                return null;
+                return (null, $"Ошибка подключения к сети: {ex.Message}");
             }
         }
 
@@ -55,12 +97,11 @@ namespace BoostX.Core.Services
 
                 using (var client = new HttpClient())
                 {
-                    client.DefaultRequestHeaders.Add("User-Agent", "BoostX-Client");
+                    client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0");
                     var data = await client.GetByteArrayAsync(downloadUrl);
                     await File.WriteAllBytesAsync(tempPath, data);
                 }
 
-                // Батник для бесшовной замены exe
                 var updaterBat = Path.Combine(Path.GetTempPath(), "boostx_updater.bat");
                 var batContent = $@"
 @echo off
