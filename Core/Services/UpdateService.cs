@@ -9,15 +9,17 @@ namespace BoostX.Core.Services
 {
     public class UpdateInfo
     {
-        public string LatestVersion { get; set; } = "1.0.0";
+        public string LatestVersion { get; set; } = "1.0.2";
         public string DownloadUrl { get; set; } = "";
         public string Changelog { get; set; } = "";
     }
 
     public static class UpdateService
     {
-        public const string CurrentVersion = "1.0.0";
-        // URL к вашему JSON-файлу манифеста на GitHub или личном сервере
+        // Версия текущей сборки приложения
+        public const string CurrentVersion = "1.0.2";
+
+        // URL к манифесту на GitHub
         private const string UpdateCheckUrl = "https://raw.githubusercontent.com/vectoramir27-svg/boostX/main/version.json";
 
         public static async Task<UpdateInfo?> CheckForUpdatesAsync()
@@ -26,8 +28,12 @@ namespace BoostX.Core.Services
             {
                 using var client = new HttpClient();
                 client.Timeout = TimeSpan.FromSeconds(5);
+                // GitHub требует наличия заголовка User-Agent
+                client.DefaultRequestHeaders.Add("User-Agent", "BoostX-App");
+
                 var json = await client.GetStringAsync(UpdateCheckUrl);
-                return JsonSerializer.Deserialize<UpdateInfo>(json);
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                return JsonSerializer.Deserialize<UpdateInfo>(json, options);
             }
             catch
             {
@@ -45,11 +51,14 @@ namespace BoostX.Core.Services
 
                 using (var client = new HttpClient())
                 {
+                    // GitHub требует наличие заголовка User-Agent при скачивании файла релиза
+                    client.DefaultRequestHeaders.Add("User-Agent", "BoostX-App");
+
                     var data = await client.GetByteArrayAsync(downloadUrl);
                     await File.WriteAllBytesAsync(tempPath, data);
                 }
 
-                // Скрипт бесшовного обновления: ждет завершения boostX, перезаписывает exe и запускает заново
+                // Скрипт бесшовного обновления
                 var updaterBat = Path.Combine(Path.GetTempPath(), "boostx_updater.bat");
                 var batContent = $@"
 @echo off
