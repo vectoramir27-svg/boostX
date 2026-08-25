@@ -285,43 +285,44 @@ namespace BoostX.Views
             }
         }
 
-        // Прозрачная проверка онлайн-обновления с детальными уведомлениями
         private async void BtnCheckUpdates_Click(object sender, RoutedEventArgs e)
         {
             ShowToast("Проверка сервера обновлений...", true);
-            var (update, errorMessage) = await UpdateService.CheckForUpdatesAsync();
+            var (update, rawJson, errorMessage) = await UpdateService.CheckForUpdatesAsync();
 
             if (!string.IsNullOrEmpty(errorMessage))
             {
-                MessageBox.Show($"Не удалось проверить обновление:\n{errorMessage}\n\nПроверьте подключение к интернету или файл version.json на GitHub.", "Ошибка проверки", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show($"Ошибка проверки:\n{errorMessage}", "BoostX Updater", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            if (update != null && !string.IsNullOrWhiteSpace(update.LatestVersion))
+            if (update == null || string.IsNullOrWhiteSpace(update.LatestVersion))
             {
-                // Нормализуем версии (убираем префикс 'v', пробелы и сравниваем без учета регистра)
-                string serverVer = update.LatestVersion.Trim().TrimStart('v', 'V');
-                string currentVer = UpdateService.CurrentVersion.Trim().TrimStart('v', 'V');
+                MessageBox.Show($"Ответ сервера не распознан:\n{rawJson}", "BoostX Updater", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
 
-                if (!string.Equals(serverVer, currentVer, StringComparison.OrdinalIgnoreCase))
+            string serverVer = update.LatestVersion.Trim().TrimStart('v', 'V');
+            string currentVer = UpdateService.CurrentVersion.Trim().TrimStart('v', 'V');
+
+            if (!string.Equals(serverVer, currentVer, StringComparison.OrdinalIgnoreCase))
+            {
+                var res = MessageBox.Show(
+                    $"Доступна новая версия: v{update.LatestVersion}!\n(Текущая у вас: v{UpdateService.CurrentVersion})\n\nЧто нового:\n{update.Changelog}\n\nОбновить прямо сейчас?",
+                    "Обновление boostX",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+
+                if (res == MessageBoxResult.Yes)
                 {
-                    var res = MessageBox.Show(
-                        $"Доступна новая версия: v{update.LatestVersion}!\n(Текущая: v{UpdateService.CurrentVersion})\n\nЧто нового:\n{update.Changelog}\n\nОбновить сейчас?",
-                        "Обновление boostX",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Information);
-
-                    if (res == MessageBoxResult.Yes)
+                    ShowToast("Загрузка обновления...", true);
+                    bool success = await UpdateService.DownloadAndInstallUpdateAsync(update.DownloadUrl);
+                    if (!success)
                     {
-                        ShowToast("Загрузка обновления...", true);
-                        bool success = await UpdateService.DownloadAndInstallUpdateAsync(update.DownloadUrl);
-                        if (!success)
-                        {
-                            MessageBox.Show("Не удалось скачать или установить файл обновления. Проверьте ссылку DownloadUrl в файле version.json на GitHub.", "Ошибка установки", MessageBoxButton.OK, MessageBoxImage.Error);
-                        }
+                        MessageBox.Show("Не удалось скачать файл. Проверьте ссылку DownloadUrl в version.json.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
-                    return;
                 }
+                return;
             }
 
             ShowToast($"У вас установлена самая свежая версия v{UpdateService.CurrentVersion}", true);
