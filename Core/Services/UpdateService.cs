@@ -18,7 +18,7 @@ namespace BoostX.Core.Services
     {
         public const string CurrentVersion = "1.0.0";
         // URL к вашему JSON-файлу манифеста на GitHub или личном сервере
-        private const string UpdateCheckUrl = "https://raw.githubusercontent.com/wonderfultech/boostX/main/version.json";
+        private const string UpdateCheckUrl = "https://raw.githubusercontent.com/vectoramir27-svg/boostX/main/version.json";
 
         public static async Task<UpdateInfo?> CheckForUpdatesAsync()
         {
