@@ -1,5 +1,5 @@
 {
-  "LatestVersion": "1.0.2",
-  "DownloadUrl": "https://github.com/vectoramir27-svg/boostX/releases/download/v1.0.2/BoostX.exe",
-  "Changelog": "• Добавлена авторизация через @boostXauth_bot\n• Полная кастомизация цвета интерфейса\n• Динамический список изменений"
+  "LatestVersion": "1.0.3",
+  "DownloadUrl": "https://github.com/vectoramir27-svg/boostX/releases/download/v1.0.3/BoostX.exe",
+  "Changelog": "• Исправления интерфейса\n• Оптимизация работы автоапдейтера"
 }
